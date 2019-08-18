@@ -24,10 +24,12 @@
      ((not rows) (resize in out cols (rows-from-columns width height cols))))))
 
 (define-record-type <photo>
-  (make-photo title path)
+  (make-photo title path prev next)
   photo?
   (title photo-title)
-  (path  photo-path))
+  (path  photo-path)
+  (prev  photo-prev set-photo-prev)
+  (next  photo-next set-photo-next))
 
 (define (photo-resize-path photo subtitle)
   (p/ "photos" (string-join (list (photo-title photo) subtitle) "_")))
@@ -64,8 +66,22 @@
     (string-titlecase spaced)))
 
 (define (photos albumdir)
-  (let ((photos (list-dir albumdir)))
-    (map (lambda (photo) (make-photo (string-drop-right (kebab-to-title photo) 4) (p/ albumdir photo))) photos)))
+  (define prev '())
+  (let* ((photo-paths (list-dir albumdir))
+	 (photos (map
+		  (lambda (photo)
+		    (make-photo
+		     (string-drop-right (kebab-to-title photo) 4)
+		     (p/ albumdir photo)
+		     '() '()))
+		    photo-paths)))
+    (for-each (lambda (photo)
+		(set-photo-prev photo prev)
+		(if (not (null? prev))
+		    (set-photo-next prev photo))
+		(set! prev photo))
+	      photos)
+    photos))
 
 (define (albums dirname)
   (let* ((dots (string->char-set "."))
@@ -121,8 +137,17 @@
 
 (define (photo-page photo)
   (base-template
-   `(a (@ (href ,(photo-fullsize-path photo)))
-       (img (@ (src ,(photo-medium-path photo)))))))
+   `(div (@ (id "photo-page-content"))
+     (a (@ (href ,(photo-fullsize-path photo)) (id "block-image"))
+	(img (@ (src ,(photo-medium-path photo)))))
+     (div (@ (id "prev"))
+	  ,(if (not (null? (photo-prev photo)))
+	       `(a (@ (href ,(photo-page-name (photo-prev photo)))) "Prev")
+	       '()))
+     (div (@ (id "next"))
+	  ,(if (not (null? (photo-next photo)))
+	       `(a (@ (href ,(photo-page-name (photo-next photo)))) "Next")
+	       '())))))
 
 (define (album-page-name album)
   (string-join (list (string-downcase (album-title album)) "html") "."))
